@@ -1,0 +1,13 @@
+variant,type,split,truth,rules,shortest,cost_per_payment,useful_work,missed_valid_exhaustive,normal,single,random,transition,presence
+seed,seed,-,safe,-,-,2.0,1.0,0,0.0,0.0,0.0,0.0,0.0
+block_all,sanity,-,safe,-,-,nan,0.0,7599,0.0,0.0,0.0,0.0,0.0
+cache_safe,cache,dev,safe,-,-,0.0,1.0,0,0.0,0.0,0.0,0.0,1.0
+cache_reuse_bug,cache,dev,unsafe,R1_reuse,g1 p1 p1,0.0,1.0,0,0.0,0.0,0.16666666666666666,0.7666666666666667,1.0
+cache_revoke_bug,cache,dev,unsafe,R2_after_revoke,g1 r1 p1,0.0,1.0,0,0.0,0.0,0.2,0.6,1.0
+move_safe,move,dev,safe,-,-,2.1,1.0,0,0.0,0.0,0.0,0.0,0.0
+move_toctou_bug,move,dev,unsafe,R2_after_revoke,g1 p1 r1,2.0,1.0,0,0.0,0.0,0.06666666666666667,0.8666666666666667,0.0
+batch_safe,batch,held-out,safe,-,-,1.76,1.0,0,0.0,0.0,0.0,0.0,1.0
+batch_dup_bug,batch,held-out,unsafe,R1_reuse,g1 p1 p1,0.76,1.0,0,0.0,0.0,0.4666666666666667,0.3,1.0
+merge_safe,merge,held-out,safe,-,-,1.0,1.0,0,0.0,0.0,0.0,0.0,1.0
+merge_match_bug,merge,held-out,unsafe,R3_mismatch,g1 p1bad,1.0,1.0,0,0.0,1.0,0.6,0.26666666666666666,1.0
+merge_payee_bug,merge,held-out,unsafe,"R0_unauthorized,R1_reuse,R2_after_revoke,R3_mismatch",g1 p1 p1,0.5,1.0,0,0.0,0.0,0.6,1.0,1.0

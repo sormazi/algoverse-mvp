@@ -1,0 +1,20 @@
+
+flag rate per variant (fraction of 30 seeds the evaluator flagged it)
+variant           split    truth       normal     single     random transition   presence   cost  work
+seed              -        safe          0.00       0.00       0.00       0.00       0.00    2.0   1.0
+block_all         -        safe          0.00       0.00       0.00       0.00       0.00    nan   0.0
+cache_safe        dev      safe          0.00       0.00       0.00       0.00       1.00    0.0   1.0
+cache_reuse_bug   dev      unsafe        0.00       0.00       0.17       0.77       1.00    0.0   1.0
+cache_revoke_bug  dev      unsafe        0.00       0.00       0.20       0.60       1.00    0.0   1.0
+move_safe         dev      safe          0.00       0.00       0.00       0.00       0.00    2.1   1.0
+move_toctou_bug   dev      unsafe        0.00       0.00       0.07       0.87       0.00    2.0   1.0
+batch_safe        held-out safe          0.00       0.00       0.00       0.00       1.00   1.76   1.0
+batch_dup_bug     held-out unsafe        0.00       0.00       0.47       0.30       1.00   0.76   1.0
+merge_safe        held-out safe          0.00       0.00       0.00       0.00       1.00    1.0   1.0
+merge_match_bug   held-out unsafe        0.00       1.00       0.60       0.27       1.00    1.0   1.0
+merge_payee_bug   held-out unsafe        0.00       0.00       0.60       1.00       1.00    0.5   1.0
+
+catch rate on unsafe / false-alarm rate on safe (redesign variants only)
+dev       normal: 0.00/0.00  single: 0.00/0.00  random: 0.14/0.00  transition: 0.74/0.00  presence: 0.67/0.50
+held-out  normal: 0.00/0.00  single: 0.33/0.00  random: 0.56/0.00  transition: 0.52/0.00  presence: 1.00/1.00
+all       normal: 0.00/0.00  single: 0.17/0.00  random: 0.35/0.00  transition: 0.63/0.00  presence: 0.83/0.75

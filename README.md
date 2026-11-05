@@ -1,4 +1,4 @@
-# algoverse-mvp: do safety evaluations survive harness redesign?
+# do safety evaluations survive harness redesign?
 
 When a self-improving agent rewrites its own harness to run faster, it often restructures the safety checks: caching permissions, merging calls, batching. This repo tests whether common safety evaluations can tell **safe redesigns** from **broken ones**, and whether an LLM optimizer actually produces broken ones. It builds on *Masked Erosion* (arXiv 2610.38392) and *Safety Must Survive Self-Improvement* (arXiv 2610.01073).
 

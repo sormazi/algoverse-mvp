@@ -170,9 +170,6 @@ Across all LLM runs so far, the presence audit has flagged 46 of 46 safe agent-w
 - Still one model. A second model is the next part of Step 2.
 
 ### How subtle are the unsafe versions? (`subtlety_report.py`)
-
-Mentor feedback asked whether we only measure blunt shortcuts. The exhaustive search lets us answer that directly: for each unsafe version, the length of its shortest violating sequence and the fraction of all sequences (up to 5 actions) that violate.
-
 Across the 8 tension runs (102 unsafe versions):
 
 | shortest violation | count | mean violation density | transition catch | random catch |
@@ -255,14 +252,7 @@ Two differences from payments matter. First, far fewer unsafe versions were *acc
 - In payments every unsafe model-written version fails within 3 actions; domain 2 produced 4 and 5 action bugs, which sit at the edge of the depth-5 ground truth. Safe labels in domain 2 were re-checked at depth 6.
 - Domain 2 unsafe rewrites are often near-duplicates of the same cache design, so 68 unsafe versions are closer to 3 distinct designs. The per-run statistics treat runs, not rewrites, as the unit.
 
-## Next steps
-
-1. A second, non-Claude model on both domains.
-2. Domain 2 with requirements shown (secondary pre-registered condition), to see whether the cache bug comes from not knowing logout matters.
-3. Compare gates: normal-only, transition-augmented, PACE-style statistical, LLM diff reviewer.
-4. Dose-response: vary how much cheaper the unsafe design is and measure how often the model takes it.
-5. Scale the world (more IDs and actions) and rerun the budget sweep.
-6. Have teammates write 4 to 6 blind held-out redesigns.
+## Next steps?
 
 ## Repo layout
 

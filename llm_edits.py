@@ -167,11 +167,17 @@ def main():
     ap.add_argument("--tension", action="store_true",
                     help="run 3: no revoke notifications, no version(); unsafe shortcuts are cheaper")
     ap.add_argument("--provider", choices=["bedrock", "anthropic"], default="bedrock")
+    ap.add_argument("--seed", type=int, default=0,
+                    help="run label; model sampling (temperature 0.8) is the source of variation")
     ap.add_argument("--out", default="llm_runs")
     a = ap.parse_args()
     if not a.mock and not a.model:
         ap.error("pass --model <bedrock model id> or --mock")
     os.makedirs(a.out, exist_ok=True)
+    random.seed(a.seed)
+    json.dump(dict(script="llm_edits", model=a.model or "mock", provider=a.provider, seed=a.seed,
+                   rounds=a.rounds, tension=a.tension, hide_requirements=a.hide_requirements),
+              open(f"{a.out}/meta.json", "w"), indent=1)
     testbed.TENSION = a.tension
     doc = API_DOC_TENSION if a.tension else API_DOC
     api = re.sub(r"@@REQ@@.*?@@ENDREQ@@", "", doc, flags=re.S) if a.hide_requirements \

@@ -52,9 +52,18 @@ pip install boto3
 export AWS_BEARER_TOKEN_BEDROCK=...      # never commit keys
 python3 llm_edits.py --model us.anthropic.claude-sonnet-4-6 --rounds 15 --out runs_X
 python3 self_agent.py --model us.anthropic.claude-sonnet-4-6 --generations 15 --hide-requirements --tension --out runs_agent_X
+
+# dose-response: vary the cost gap between safe and unsafe designs
+for gap in 0.0 0.2 0.4 0.6 0.8 1.0; do
+  for s in 1 2 3; do
+    python3 llm_edits.py --model us.anthropic.claude-sonnet-4-6 \
+      --cost-gap $gap --hide-requirements --rounds 15 --seed $s --out runs_dose_${gap}_s${s}
+  done
+done
+python3 dose_response.py --csv analysis/dose_response.csv runs_dose_*
 ```
 
-Flags: `--hide-requirements` removes the written safety rules from the prompt. `--tension` turns on run 3's environment (below, payments only). `--domain sessions` runs in domain 2 (below); the default is `payments`, so every earlier command behaves exactly as before.
+Flags: `--hide-requirements` removes the written safety rules from the prompt. `--tension` turns on run 3's environment (below, payments only). `--cost-gap GAP` scales server-facing costs to GAP (implies `--tension`); use it for the dose-response experiment. `--domain sessions` runs in domain 2 (below); the default is `payments`, so every earlier command behaves exactly as before.
 
 ## Results in detail
 
@@ -265,6 +274,7 @@ sweep.py         budget sweep
 llm_edits.py     LLM rewrite loop with a greedy gate (--mock, --hide-requirements, --tension)
 self_agent.py    DGM-style self-improving agent with an archive (--mock, --hide-requirements, --tension, --seed)
 replicate.py     aggregate runs with bootstrap 95% CIs over runs
+dose_response.py dose-response: aggregate runs by cost gap, with CIs and plot
 sessions.py      domain 2: session tokens (service, contract, planted variants, evaluators, prompts)
 domains.py       domain registry used by --domain, plus the subtlety metric
 subtlety_report.py   shortest-violation length and violation density for unsafe versions in run folders

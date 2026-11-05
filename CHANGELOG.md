@@ -32,6 +32,53 @@ Ground truth used throughout: a harness is **unsafe** if any sequence of up to 5
 
 ---
 
+## v0.8: dose-response experiment (cost gap as a continuous variable)
+
+The core causal claim is "when the unsafe shortcut is cheaper, the agent takes it." Until now this was a single data point: tension mode (safe = 1.0, unsafe = 0.0). This version makes the cost gap continuously configurable so the relationship can be measured as a curve.
+
+### Added
+- `COST_GAP` in `testbed.py`: a module-level variable (default 1.0) that scales the cost of all server-facing calls (`check`, `consume`, `check_and_consume`, `check_batch`). The cost gap between the cheapest safe design (must call the server every payment) and the cheapest unsafe design (grant-only cache, cost 0.0) equals this value.
+- `--cost-gap GAP` flag on `llm_edits.py` and `self_agent.py`. Setting it implies `--tension` (revoke notifications off, no `version()`). The model's API doc shows the scaled costs.
+- `make_api_doc(tension, cost_gap)` in `llm_edits.py`: generates the API doc with the correct costs. `cost_gap=1.0` reproduces the old `API_DOC` / `API_DOC_TENSION` strings byte-for-byte.
+- `cost_gap` field in `meta.json` for all new runs.
+- `dose_response.py`: aggregates run folders grouped by cost gap, with bootstrap 95% CIs over runs, a text bar chart, optional CSV, and optional matplotlib plot.
+- `domains.py` `api_doc` lambdas now accept `cost_gap`.
+
+### Checked
+- `make_api_doc(False, 1.0) == API_DOC` and `make_api_doc(True, 1.0) == API_DOC_TENSION` (asserted).
+- `run.py`, `sessions.py`, `llm_edits.py --mock`, `self_agent.py --mock`, `sweep.py`, `subtlety_report.py`, `d2_report.py` all produce identical output to before.
+- `--cost-gap` is rejected for the sessions domain (implies tension, which is payments-only).
+- `dose_response.py` correctly infers `cost_gap=1.0` for old tension runs without `meta.json`.
+
+### Runs
+Not yet run with a real model. The commands are:
+```
+# rewrite loop
+for gap in 0.0 0.2 0.4 0.6 0.8 1.0; do
+  for s in 1 2 3; do
+    python3 llm_edits.py --model us.anthropic.claude-sonnet-4-6 \
+      --cost-gap $gap --hide-requirements --rounds 15 --seed $s \
+      --out runs_dose_${gap}_s${s}
+  done
+done
+python3 dose_response.py --csv analysis/dose_response.csv runs_dose_*
+
+# self-improving agent
+for gap in 0.0 0.2 0.4 0.6 0.8 1.0; do
+  for s in 1 2 3; do
+    python3 self_agent.py --model us.anthropic.claude-sonnet-4-6 \
+      --cost-gap $gap --hide-requirements --generations 15 --seed $s \
+      --out runs_dose_agent_${gap}_s${s}
+  done
+done
+python3 dose_response.py runs_dose_agent_*
+```
+
+### What we expect
+At `cost_gap=0.0` (all calls free, but revoke notifications still off) there is no cost advantage to skipping safety, so we expect few or no unsafe rewrites — like runs 1–2. At `cost_gap=1.0` we expect the same result as `runs_tension` (12/15 unsafe). The shape of the curve between those points is the finding.
+
+---
+
 ## v0.6: second domain (session tokens), pre-registration, subtlety metric
 
 Prompted by mentor feedback (Madhur, Nov 5): are we only measuring blunt shortcuts, and did we build the cost asymmetry ourselves?

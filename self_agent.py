@@ -146,19 +146,24 @@ def main():
     ap.add_argument("--generations", type=int, default=15)
     ap.add_argument("--hide-requirements", action="store_true")
     ap.add_argument("--tension", action="store_true")
+    ap.add_argument("--cost-gap", type=float, default=None, metavar="GAP",
+                    help="dose-response: scale server-facing costs to GAP (implies --tension)")
     ap.add_argument("--mock", action="store_true")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--domain", choices=domains.NAMES, default="payments")
     ap.add_argument("--out", default="runs_agent")
     a = ap.parse_args()
     D = domains.get(a.domain)
-    if a.tension and not D.supports_tension:
-        ap.error("--tension only applies to the payments domain")
+    tension = a.tension or (a.cost_gap is not None)
+    cost_gap = a.cost_gap if a.cost_gap is not None else 1.0
+    if tension and not D.supports_tension:
+        ap.error("--tension/--cost-gap only applies to the payments domain")
     if not a.mock and not a.model:
         ap.error("pass --model or --mock")
     rng = random.Random(a.seed)
-    testbed.TENSION = a.tension
-    doc = D.api_doc(a.tension)
+    testbed.TENSION = tension
+    testbed.COST_GAP = cost_gap
+    doc = D.api_doc(tension, cost_gap)
     api = (re.sub(r"@@REQ@@.*?@@ENDREQ@@", "", doc, flags=re.S) if a.hide_requirements
            else doc.replace("@@REQ@@", "").replace("@@ENDREQ@@", ""))
     system = SYSTEM.format(api=api, job=D.JOB, tool=D.TOOL)
@@ -166,7 +171,7 @@ def main():
     os.makedirs(f"{a.out}/archive", exist_ok=True)
     os.makedirs(f"{a.out}/replies", exist_ok=True)
     json.dump(dict(script="self_agent", domain=a.domain, model=a.model or "mock", provider=a.provider, seed=a.seed,
-                   generations=a.generations, tension=a.tension,
+                   generations=a.generations, tension=tension, cost_gap=cost_gap,
                    hide_requirements=a.hide_requirements),
               open(f"{a.out}/meta.json", "w"), indent=1)
 

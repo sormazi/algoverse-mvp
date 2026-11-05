@@ -26,10 +26,12 @@ Usage
   python3 self_agent.py --mock --generations 6                     # no model calls
   python3 self_agent.py --mock --domain sessions --generations 6   # domain 2
   python3 self_agent.py --mock --fitness episodes --episodes 3 --generations 6   # step 1
+  # pause/resume: stop cleanly after --time-budget seconds, continue later with --resume
+  python3 self_agent.py ... --time-budget 60 --out runs_X ; python3 self_agent.py ... --resume --out runs_X
   python3 self_agent.py --model us.anthropic.claude-sonnet-4-6 --generations 15 \
       --hide-requirements --tension --out runs_agent
 """
-import argparse, inspect, json, os, random, re
+import argparse, inspect, json, os, random, re, sys, time
 import testbed, run, llm_edits, domains
 from testbed import Harness, Seed, GRANTS, Service
 
@@ -164,8 +166,14 @@ def main():
                          "episodes: score versions on their own work episodes (step 1)")
     ap.add_argument("--episodes", type=int, default=3,
                     help="with --fitness episodes: work episodes per new version")
+    ap.add_argument("--time-budget", type=float, default=None, metavar="SECONDS",
+                    help="pause cleanly (exit code 3) at the first generation boundary after this many "
+                         "seconds; continue with --resume")
+    ap.add_argument("--resume", action="store_true",
+                    help="continue a paused run from OUT/state.json (same other flags)")
     ap.add_argument("--out", default="runs_agent")
     a = ap.parse_args()
+    t0 = time.time()
     D = domains.get(a.domain)
     tension = a.tension or (a.cost_gap is not None)
     cost_gap = a.cost_gap if a.cost_gap is not None else 1.0
@@ -175,6 +183,9 @@ def main():
         ap.error("--tension/--cost-gap only applies to the payments domain")
     if not a.mock and not a.model:
         ap.error("pass --model or --mock")
+    if a.resume and os.path.exists(f"{a.out}/log.json"):
+        print(f"{a.out} already finished", file=sys.stderr)
+        sys.exit(0)
     rng = random.Random(a.seed)
     testbed.TENSION = tension
     testbed.COST_GAP = cost_gap
@@ -235,19 +246,41 @@ def main():
 
     EP = a.fitness == "episodes"
 
-    seed_code = inspect.getsource(D.Seed).replace("class Seed(", "class Candidate(")
-    seed_cls = load(seed_code, D)
-    archive = [{**llm_edits.evaluate(seed_cls, D), **dict(ver="v00", parent=None, code=seed_code,
-                cost=D.efficiency(seed_cls)[0], work=1.0, children=0, gen=0)}]
-    if EP:
-        archive[0]["eps"] = [work(seed_cls, "v00", seed_code, f"seed_ep{k}") for k in range(a.episodes)]
-        archive[0]["fixed_cost"] = archive[0]["cost"]
-        archive[0]["cost"], archive[0]["work"], _ = fitness(archive[0]["eps"])
-    open(f"{a.out}/archive/v00.py", "w").write(seed_code)
-    log = [{**{k: v for k, v in archive[0].items() if k not in ("code", "eps")}, "event": "seed"}]
-    print(json.dumps(log[-1]))
+    state_path = f"{a.out}/state.json"
 
-    for g in range(1, a.generations + 1):
+    def save_state(next_g):
+        st = dict(next_g=next_g, archive=archive, log=log,
+                  rng=[rng.getstate()[0], list(rng.getstate()[1]), rng.getstate()[2]])
+        json.dump(st, open(state_path + ".tmp", "w"))
+        os.replace(state_path + ".tmp", state_path)       # atomic: a kill never leaves half a file
+
+    if a.resume and os.path.exists(state_path):
+        st = json.load(open(state_path))
+        archive, log, start = st["archive"], st["log"], st["next_g"]
+        rng.setstate((st["rng"][0], tuple(st["rng"][1]), st["rng"][2]))
+        print(f"resuming at generation {start}", file=sys.stderr)
+    else:
+        seed_code = inspect.getsource(D.Seed).replace("class Seed(", "class Candidate(")
+        seed_cls = load(seed_code, D)
+        archive = [{**llm_edits.evaluate(seed_cls, D), **dict(ver="v00", parent=None, code=seed_code,
+                    cost=D.efficiency(seed_cls)[0], work=1.0, children=0, gen=0)}]
+        if EP:
+            archive[0]["eps"] = [work(seed_cls, "v00", seed_code, f"seed_ep{k}") for k in range(a.episodes)]
+            archive[0]["fixed_cost"] = archive[0]["cost"]
+            archive[0]["cost"], archive[0]["work"], _ = fitness(archive[0]["eps"])
+        open(f"{a.out}/archive/v00.py", "w").write(seed_code)
+        log = [{**{k: v for k, v in archive[0].items() if k not in ("code", "eps")}, "event": "seed"}]
+        print(json.dumps(log[-1]))
+        start = 1
+        if a.time_budget is not None:
+            save_state(start)
+
+    for g in range(start, a.generations + 1):
+        progressed = g > start or not a.resume          # always do at least one step per call
+        if a.time_budget is not None and progressed and time.time() - t0 > a.time_budget:
+            save_state(g)
+            print(f"paused before generation {g}; continue with --resume", file=sys.stderr)
+            sys.exit(3)
         parent = select_parent(archive, rng)
         parent["children"] += 1
         pcls = load(parent["code"], D)
@@ -299,6 +332,8 @@ def main():
             rec.update(error=repr(e)[:200])
         log.append(rec)
         print(json.dumps({k: v for k, v in rec.items() if k != "episode"}))
+        if a.time_budget is not None:
+            save_state(g + 1)
 
     json.dump(log, open(f"{a.out}/log.json", "w"), indent=1)
     json.dump([{**{k: v for k, v in x.items() if k not in ("code", "eps")},

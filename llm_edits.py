@@ -23,7 +23,7 @@ Usage
 
 Cost: ~15 calls x ~3k tokens each, well under $1 on most Bedrock models.
 """
-import argparse, inspect, json, os, random, re, signal, textwrap
+import argparse, inspect, json, os, random, re, signal, sys, textwrap, time
 import testbed, run, domains
 from testbed import Harness, Seed
 
@@ -185,8 +185,14 @@ def main():
                     help="run label; model sampling (temperature 0.8) is the source of variation")
     ap.add_argument("--domain", choices=domains.NAMES, default="payments",
                     help="which world to run in (default: payments, the original MVP)")
+    ap.add_argument("--time-budget", type=float, default=None, metavar="SECONDS",
+                    help="pause cleanly (exit code 3) at the first round boundary after this many "
+                         "seconds; continue with --resume")
+    ap.add_argument("--resume", action="store_true",
+                    help="continue a paused run from OUT/state.json (same other flags)")
     ap.add_argument("--out", default="llm_runs")
     a = ap.parse_args()
+    t0 = time.time()
     D = domains.get(a.domain)
     tension = a.tension or (a.cost_gap is not None)
     cost_gap = a.cost_gap if a.cost_gap is not None else 1.0
@@ -196,6 +202,9 @@ def main():
         ap.error("--tension/--cost-gap only applies to the payments domain")
     if not a.mock and not a.model:
         ap.error("pass --model <bedrock model id> or --mock")
+    if a.resume and os.path.exists(f"{a.out}/results.json"):
+        print(f"{a.out} already finished", file=sys.stderr)
+        sys.exit(0)
     os.makedirs(a.out, exist_ok=True)
     random.seed(a.seed)
     json.dump(dict(script="llm_edits", domain=a.domain, model=a.model or "mock", provider=a.provider, seed=a.seed,
@@ -210,8 +219,24 @@ def main():
 
     best_code = inspect.getsource(D.Seed).replace("class Seed(", "class Candidate(")
     best_cost, feedback, results = D.efficiency(D.Seed)[0], "", []
+    state_path, start = f"{a.out}/state.json", 0
+    if a.resume and os.path.exists(state_path):
+        st = json.load(open(state_path))
+        best_code, best_cost, feedback, results, start = (st["best_code"], st["best_cost"], st["feedback"],
+                                                          st["results"], st["next_round"])
+        print(f"resuming at round {start}", file=sys.stderr)
+
+    def save_state(next_round):
+        json.dump(dict(next_round=next_round, best_code=best_code, best_cost=best_cost,
+                       feedback=feedback, results=results), open(state_path + ".tmp", "w"))
+        os.replace(state_path + ".tmp", state_path)
     noun = "payment" if a.domain == "payments" else "account-operations"
-    for i in range(a.rounds):
+    for i in range(start, a.rounds):
+        progressed = i > start                           # always do at least one round per call
+        if a.time_budget is not None and progressed and time.time() - t0 > a.time_budget:
+            save_state(i)
+            print(f"paused before round {i}; continue with --resume", file=sys.stderr)
+            sys.exit(3)
         prompt = PROMPT.format(api=api, cost=best_cost, code=best_code, feedback=feedback,
                                noun=noun, unit=D.UNIT)
         reply = (mock_reply(i, D) if a.mock else
@@ -235,6 +260,8 @@ def main():
             feedback = f"Your last attempt crashed: {repr(e)[:200]}"
         results.append(rec)
         print(json.dumps(rec))
+        if a.time_budget is not None:
+            save_state(i + 1)
 
     json.dump(results, open(f"{a.out}/results.json", "w"), indent=1)
     ok = [r for r in results if "truth" in r]

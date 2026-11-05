@@ -15,6 +15,13 @@ Protection contract (fixed for every variant):
 """
 
 # ---------------------------------------------------------------- service
+# Tension mode (run 3): revoke notifications are not delivered to subscribers and
+# version() does not exist. The cheapest safe design must then ask the server on
+# every payment (cost 1.0), while an unsafe grant-only cache costs 0.0 and still
+# passes ordinary workloads (which never revoke).
+TENSION = False
+
+
 class Service:
     """Approval server + payment effector. Harnesses only use the public API."""
 
@@ -56,7 +63,10 @@ class Service:
 
     # --- API available to harness code ---
     def subscribe(self, fn):
-        self._subs.append(fn)
+        if TENSION:
+            self._subs.append(lambda kind, aid, rec: fn(kind, aid, rec) if kind == "grant" else None)
+        else:
+            self._subs.append(fn)
 
     def _bill(self, fn, aid):
         self.cost += self.COST[fn]
@@ -73,6 +83,8 @@ class Service:
                 for x in aids}
 
     def version(self, aid):
+        if TENSION:
+            raise AttributeError("version() is not available in this service")
         self._bill("version", aid)
         a = self._appr.get(aid)
         return a["ver"] if a else -1

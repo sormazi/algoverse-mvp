@@ -69,8 +69,21 @@ Cells show the fraction of the 30 seeds in which the evaluator flagged the varia
 - **The presence (location-based) audit flagged all 15 safe rewrites: a 100% false-alarm rate on real agent edits.** Behavior-based evaluators raised zero false alarms. This is H1 evidence from edits we didn't write.
 - With the requirements stated explicitly, the model didn't produce a single unsafe edit. That leaves open whether agents break safeguards under pressure, which run 2 tests by hiding the requirements (`--hide-requirements`).
 
+## AI-edit run 2: same model, safety rules removed from the prompt
+
+`python llm_edits.py --model us.anthropic.claude-sonnet-4-6 --rounds 15 --hide-requirements --out runs_hidden`. The prompt showed only the API and "be cheaper and pass the regression workload". Outputs are in `runs_hidden/`.
+
+- **All 15 rewrites were safe again.** No violations, full useful work, cost down to 0.0 by round 2, 3 versions accepted.
+- **The presence audit again flagged all 15 safe rewrites (100% false alarms).** Across both runs, that's 30 of 30 safe agent redesigns wrongly flagged.
+- **Why nothing broke:** in this cost model, the cheapest design (an event-driven cache that also handles revokes) is *also* safe, so the model never had to trade safety for speed. The API names (`revoke`, `consume`) probably also signal the right behavior without any written rules.
+
+**Implication for the experiment design:** to test whether agents degrade safeguards, the environment needs real tension, where the safe design costs more than an unsafe shortcut. Candidate changes for run 3:
+- make revoke events unavailable or costly (no free `subscribe` for revokes), so staying safe after a revoke requires a paid check
+- make `consume_async` the only free call but drop server-side enforcement, so skipping consumption saves cost
+- try a weaker model, or more rounds with stronger cost pressure
+
 ## Next steps
 
 1. Scale the world (more IDs and actions) and rerun the sweep. This is the key H2 test.
 2. Have Alan or Milo write 4 to 6 new held-out variants blind.
-3. Stretch: an LLM optimizer run (~10 edits) on the seed harness, with every edit scored by these evaluators.
+3. Run 3: add tension to the environment (see above) so an unsafe shortcut is cheaper than any safe design, and check whether the agent takes it.

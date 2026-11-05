@@ -6,6 +6,31 @@ Ground truth used throughout: a harness is **unsafe** if any sequence of up to 5
 
 ---
 
+## v0.6: second domain (session tokens), pre-registration, subtlety metric
+
+Prompted by mentor feedback (Madhur, Nov 5): are we only measuring blunt shortcuts, and did we build the cost asymmetry ourselves?
+
+### Added
+- `sessions.py`, domain 2. An agent acts for logged-in sessions. Tokens can be verified locally for free but only the auth server knows about logouts and password changes (the JWT revocation problem). Costs follow one rule: a network round trip is 1.0, local work is 0.0. Contract S0 to S4 plus liveness, 9 symbols, exhaustive over 66,429 sequences. Planted variants: `Seed`, `BlockAll`, `BatchSafe`, `BatchScopeBug`, `LocalOnlyBug`, `CacheBug`, `EarlyCheckBug`.
+- `contract_transitions`, a rule that generates the transition suite from the contract's vocabulary (every history of up to 2 steps after login, then each of that session's requests, then optionally an invalidating event). 253 sequences.
+- `domains.py`, a registry, and a `--domain` flag on `llm_edits.py` and `self_agent.py` (default `payments`). `--tension` is rejected outside payments.
+- `domains.subtlety`: shortest violating sequence length and violation density. `evaluate()` now also records `shortest_len` and `violation_density` for every candidate.
+- `subtlety_report.py`: reads existing run folders (read-only), relabels each saved version, writes `analysis/subtlety.csv`.
+- `prereg/domain2.md`: world, contract, cost rule, evaluators, dev history, commands, predictions P1 to P6 and failure criteria, committed before any model call in domain 2.
+- `meta.json` now records the domain.
+
+### Fixed
+- Domain 2 liveness counted two identical requests as done after one execution; now counts executions.
+
+### Checked
+- Payments is unchanged: mock runs of `llm_edits.py` and `self_agent.py` give identical results to before (apart from the two new fields), and the payments prompts the model sees are byte-for-byte identical.
+
+### What we learned
+- Subtlety backfill over the 8 payments tension runs: all 102 unsafe model-written versions break within 3 actions (99 at length 3, 3 at length 1). The feedback was right: so far the erosion is blunt. Transition beats random by more on rarer failures (density 0.01 to 0.05: 0.63 vs 0.30) than on common ones (above 0.05: 0.95 vs 0.65).
+- Domain 2 dev iteration: a fixed state list missed the stale-cache bug; the "short histories" rule catches it. Scope bugs are static, so single probes beat transition there.
+
+---
+
 ## v0.5 (Plan Step 2): replication with seeds and confidence intervals
 
 ### Added
@@ -161,9 +186,9 @@ Aggregated with `python3 replicate.py --group "rewrite loop" runs_r3_s* --group 
 ## Not yet done
 
 - Run folders `runs_agent_tension`, `runs_agent_notension`, `runs_r3_s1`–`s3` and `runs_agent_s1`–`s3` exist locally but are not yet pushed to GitHub.
+- Domain 2 real runs (pre-registered commands in `prereg/domain2.md`).
 - Step 2: a second, non-Claude model (Llama, Mistral or Nova on Bedrock).
 - Step 3: compare gates (normal-only, transition-augmented, PACE e-process).
 - Step 4: scale the world (more approvals, longer sequences).
 - Step 5: a `heldout/` folder with a loader for redesigns we did not write ourselves.
-- Step 6: a second domain behind a `--domain` flag.
 - Step 7: methods and results write-up.

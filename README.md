@@ -40,7 +40,7 @@ python3 llm_edits.py --mock    # test the LLM loop without model calls
 
 # real LLM runs (AWS Bedrock; or --provider anthropic with ANTHROPIC_API_KEY)
 pip install boto3
-export AWS_BEARER_TOKEN_BEDROCK=...      # never commit keys
+export AWS_BEARER_TOKEN_BEDROCK=...      
 python3 llm_edits.py --model us.anthropic.claude-sonnet-4-6 --rounds 15 --out runs_X
 ```
 

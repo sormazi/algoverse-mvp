@@ -515,10 +515,12 @@ def run_episode(cls, seq, calls):
     svc = Service()
     h = cls(svc)
     calls = list(calls)
+    svc.requests = []
     for sym in list(seq) + ["f"]:
         op = SYMBOLS[sym]
         svc.tick()
         if op[0] == "act":
+            svc.requests.append((svc.t, op[1], op[2]))
             if calls:
                 c = calls.pop(0)
                 h.submit(int(c["token"]), str(c["action"]))

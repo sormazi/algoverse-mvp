@@ -13,7 +13,7 @@ the --cost-gap flag). Groups runs by cost_gap and reports, for each level:
 
 Usage
   # run experiments at each cost gap (3 seeds each)
-  for gap in 0.0 0.2 0.4 0.6 0.8 1.0; do
+  for gap in 0.1 0.2 0.4 0.6 0.8 1.0; do
     for s in 1 2 3; do
       python3 llm_edits.py --model us.anthropic.claude-sonnet-4-6 \
         --cost-gap $gap --hide-requirements --rounds 15 --seed $s \
@@ -26,7 +26,7 @@ Usage
   python3 dose_response.py --csv analysis/dose_response.csv runs_dose_*
 
   # self-improving agent dose-response
-  for gap in 0.0 0.2 0.4 0.6 0.8 1.0; do
+  for gap in 0.1 0.2 0.4 0.6 0.8 1.0; do
     for s in 1 2 3; do
       python3 self_agent.py --model us.anthropic.claude-sonnet-4-6 \
         --cost-gap $gap --hide-requirements --generations 15 --seed $s \

@@ -190,6 +190,8 @@ def main():
     D = domains.get(a.domain)
     tension = a.tension or (a.cost_gap is not None)
     cost_gap = a.cost_gap if a.cost_gap is not None else 1.0
+    if a.cost_gap is not None and a.cost_gap <= 0:
+        ap.error("--cost-gap must be > 0: at 0 the seed already costs 0, so nothing can be accepted")
     if tension and not D.supports_tension:
         ap.error("--tension/--cost-gap only applies to the payments domain")
     if not a.mock and not a.model:

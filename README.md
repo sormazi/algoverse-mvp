@@ -243,24 +243,24 @@ Against the pre-registration: P1 (erosion without price tuning), P2 and P3 (tran
 
 Two differences from payments matter. First, far fewer unsafe versions were *accepted* (0.17 vs 0.61 to 0.82), because the most common unsafe design wasn't cheaper; erosion here is driven by the model's design habits more than by the gate. Second, the selection effect showed up in only 1 of 3 agent runs (in runs 2 and 3 the best agent was safe at 0.60). All 18 safe-labeled versions were re-checked at depth 6 (531,441 sequences each) and stayed safe (`analysis/d2_depth6.txt`).
 
- ### Dose-response: how much cheaper does the shortcut need to be? (`dose_response.py`)
-  
-  Runs 1–2 showed no erosion when the safe design was also cheap. Run 3 showed 12/15 unsafe when the unsafe design was free and the safe one cost 1.0. That is one data
-  point. The `--cost-gap GAP` flag on `llm_edits.py` and `self_agent.py` makes the cost gap continuously configurable: it scales every server-facing call cost to `GAP`
-  (0.0 to 1.0) while keeping tension mode on (no revoke notifications). At `GAP=0.0` all calls are free, so there is no cost advantage to skipping safety. At `GAP=1.0`
-  the setup matches run 3. The model's API doc shows the scaled costs, so it can reason about the tradeoff.
-  
-  Run the rewrite loop or the agent at each level, then aggregate with bootstrap CIs:
-  
-  
-  for gap in 0.0 0.2 0.4 0.6 0.8 1.0; do   for s in 1 2 3; do     python3 llm_edits.py --model us.anthropic.claude-sonnet-4-6 
-        --cost-gap $gap --hide-requirements --rounds 15 --seed $s 
-        --out runs_dose_${gap}s${s}   done done python3 dose_response.py --csv analysis/dose_response.csv runs_dose*
-  
-  
-  Not yet run. We expect few unsafe rewrites at `GAP=0.0` and the run-3 result at `GAP=1.0`. The shape of the curve between those points — monotonic, threshold, or noisy
-  — is the finding.
+### Dose-response: how much cheaper does the shortcut need to be? (`dose_response.py`)
 
+Runs 1–2 showed no erosion when the safe design was also cheap. Run 3 showed 12/15 unsafe when the unsafe design was free and the safe one cost 1.0. That is one data point. The `--cost-gap GAP` flag on `llm_edits.py` and `self_agent.py` makes the cost gap continuously configurable: it scales every server-facing call cost to `GAP` (0.0 to 1.0) while keeping tension mode on (no revoke notifications). At `GAP=0.0` all calls are free, so there is no cost advantage to skipping safety. At `GAP=1.0` the setup matches run 3. The model's API doc shows the scaled costs, so it can reason about the tradeoff.
+
+Run the rewrite loop or the agent at each level, then aggregate with bootstrap CIs:
+
+```
+for gap in 0.0 0.2 0.4 0.6 0.8 1.0; do
+  for s in 1 2 3; do
+    python3 llm_edits.py --model us.anthropic.claude-sonnet-4-6 \
+      --cost-gap $gap --hide-requirements --rounds 15 --seed $s \
+      --out runs_dose_${gap}_s${s}
+  done
+done
+python3 dose_response.py --csv analysis/dose_response.csv runs_dose_*
+```
+
+Not yet run. We expect few unsafe rewrites at `GAP=0.0` and the run-3 result at `GAP=1.0`. The shape of the curve between those points — monotonic, threshold, or noisy — is the finding.
 
 ## Caveats
 
@@ -271,7 +271,14 @@ Two differences from payments matter. First, far fewer unsafe versions were *acc
 - In payments every unsafe model-written version fails within 3 actions; domain 2 produced 4 and 5 action bugs, which sit at the edge of the depth-5 ground truth. Safe labels in domain 2 were re-checked at depth 6.
 - Domain 2 unsafe rewrites are often near-duplicates of the same cache design, so 68 unsafe versions are closer to 3 distinct designs. The per-run statistics treat runs, not rewrites, as the unit.
 
-## Next steps?
+## Next steps
+
+1. A second, non-Claude model on both domains.
+2. Domain 2 with requirements shown (secondary pre-registered condition), to see whether the cache bug comes from not knowing logout matters.
+3. Compare gates: normal-only, transition-augmented, PACE-style statistical, LLM diff reviewer.
+4. Dose-response: vary how much cheaper the unsafe design is and measure how often the model takes it. *(infrastructure added in v0.8; runs pending)*
+5. Scale the world (more IDs and actions) and rerun the budget sweep.
+6. Have teammates write 4 to 6 blind held-out redesigns.
 
 ## Repo layout
 

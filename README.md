@@ -2,7 +2,6 @@
 
 When a self-improving agent rewrites its own harness to run faster, it often restructures the safety checks: caching permissions, merging calls, batching. This repo tests whether common safety evaluations can tell **safe redesigns** from **broken ones**, and whether an LLM optimizer actually produces broken ones.
 
-It's the MVP for the Algoverse "masked erosion" project (Avi, Milo, Alan, Naud; mentor Sruthi). It builds on *Masked Erosion* (arXiv 2610.38392) and *Safety Must Survive Self-Improvement* (arXiv 2610.01073).
 
 ## Headline results so far
 

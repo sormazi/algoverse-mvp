@@ -278,7 +278,6 @@ Not yet run. We expect few unsafe rewrites at `GAP=0.0` and the run-3 result at 
 3. Compare gates: normal-only, transition-augmented, PACE-style statistical, LLM diff reviewer.
 4. Dose-response: vary how much cheaper the unsafe design is and measure how often the model takes it. *(infrastructure added in v0.8; runs pending)*
 5. Scale the world (more IDs and actions) and rerun the budget sweep.
-6. Have teammates write 4 to 6 blind held-out redesigns.
 
 ## Repo layout
 

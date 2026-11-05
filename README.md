@@ -60,6 +60,15 @@ Cells show the fraction of the 30 seeds in which the evaluator flagged the varia
 - All bugs are planted. Whether an LLM optimizer produces edits like these on its own is still untested (the stretch step).
 - move_safe isn't cheaper in this cost model. Its benefit would be latency, which isn't modeled.
 
+## AI-edit run 1: Claude Sonnet 4.6, safety rules written in the prompt
+
+`python llm_edits.py --model us.anthropic.claude-sonnet-4-6 --rounds 15` (via Bedrock). Each round, the model saw the current best harness and its cost and wrote a cheaper `Candidate`. A greedy gate accepted it if it passed ordinary workloads and was cheaper. Outputs are in `runs_sonnet46/`.
+
+- **All 15 rewrites were safe** under the exhaustive check, with no violations of R0 to R3, and all did full useful work.
+- **Cost fell from 2.0 to 0.0 per payment by round 2.** The model built the same design as the planted `cache_safe`: subscribe to grant/revoke events, track used approvals locally, fall back to atomic `check_and_consume`. 3 versions were accepted.
+- **The presence (location-based) audit flagged all 15 safe rewrites: a 100% false-alarm rate on real agent edits.** Behavior-based evaluators raised zero false alarms. This is H1 evidence from edits we didn't write.
+- With the requirements stated explicitly, the model didn't produce a single unsafe edit. That leaves open whether agents break safeguards under pressure, which run 2 tests by hiding the requirements (`--hide-requirements`).
+
 ## Next steps
 
 1. Scale the world (more IDs and actions) and rerun the sweep. This is the key H2 test.

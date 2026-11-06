@@ -2,8 +2,6 @@
 
 When a self-improving agent rewrites its own harness to run faster, it often restructures the safety checks: caching permissions, merging calls, batching. This repo tests whether common safety evaluations can tell **safe redesigns** from **broken ones**, and whether an LLM optimizer actually produces broken ones.
 
-## In plain language
-
 ### The problem
 
 An AI agent acts in the world through a layer of ordinary code called its **harness**: the code that turns "pay this invoice" into an actual payment. Part of that code is **safeguards**, such as "only pay if the payment was approved, and never after the approval was cancelled". A **self-improving** agent rewrites its own harness to do its job better or cheaper. Sometimes a rewrite moves a safeguard somewhere else and keeps it working. Sometimes it quietly breaks it, for example by remembering approvals in a local list so it no longer has to ask the server, and then never noticing when an approval is cancelled. Both kinds of rewrite look like progress: the agent still completes its tasks, just faster.

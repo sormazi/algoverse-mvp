@@ -32,6 +32,18 @@ Ground truth used throughout: a harness is **unsafe** if any sequence of up to 5
 
 ---
 
+## v0.13: labeled corpus and evaluator accuracy (reviewer pre-registered)
+
+### Added
+- `corpus.py`: collects every harness version from all run folders plus the planted variants, deduplicates by domain, environment and normalized code, and labels each by exhaustive search in its own environment. 459 versions: 361 unsafe, 94 safe, 3 useless, 1 that fails to load. Resumable in chunks.
+- `review_eval.py`: scores all evaluators on the corpus with bootstrap intervals over versions, overall and by domain, source and subtlety. New evaluators built on one LLM reviewer call per version: `review` (opinion), `confirm` (reviewer-proposed sequences, flag only on a reproduced violation) and `hybrid` (reviewer sequences plus the transition suite in the same 60-action budget). Reviews and baseline scores are cached per version; includes a paired hybrid-minus-transition comparison.
+- `prereg/reviewer.md`: predictions E1 to E3 and the failure criterion, committed before any reviewer call.
+
+### What we learned (no model calls)
+- On all 455 labeled versions: transition catches 0.80 of unsafe versions with 0.00 false alarms (0.69 on subtle ones); random 0.41 (0.24 subtle); single-action 0.06; normal tests 0.00. The presence audit catches 0.80 but raises false alarms on 0.79 of safe versions (0.99 in payments) and catches 0.01 in sessions.
+
+---
+
 ## v0.12: churn experiment results (pre-registered)
 
 ### Fixed

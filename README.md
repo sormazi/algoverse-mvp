@@ -50,6 +50,8 @@ python3 d2_report.py           # rescore domain 2 runs against the pre-registrat
 python3 self_agent.py --mock --fitness episodes   # agent scored on its own work episodes (step 1)
 python3 check_churn.py         # churn traffic: planted safe variants stay clean, invalidation bugs show up
 python3 self_agent.py --mock --tension --fitness episodes --churn 0.3 --visibility 1   # step 2
+python3 corpus.py              # labeled corpus of every harness version (analysis/corpus.jsonl)
+python3 review_eval.py --mock  # score all evaluators on the corpus (mock reviewer)
 
 # real LLM runs (AWS Bedrock; or --provider anthropic with ANTHROPIC_API_KEY)
 pip install boto3
@@ -311,6 +313,30 @@ Against the pre-registration: C1 supported (0.82 accepted unsafe with churn but 
 - **Transition-focused tests still beat random** on unsafe rewrites in every condition (0.70 to 0.84 against 0.36 to 0.59), with no false alarms.
 - Full per-run numbers: `analysis/churn_results.md`.
 
+### Evaluator accuracy on the full labeled corpus (`corpus.py`, `review_eval.py`)
+
+`corpus.py` collects every harness version from all runs plus the planted variants, removes duplicates (same domain, environment and normalized code), and labels each one by exhaustive search in the environment it was written for: 459 versions, of which 361 unsafe and 94 safe. `review_eval.py` scores every evaluator on the same 455 safe or unsafe versions, as miss and false-alarm rates with bootstrap intervals over versions.
+
+Existing evaluators (60-action budget, 30 seeds):
+
+| evaluator | catch on unsafe (361) | false alarm on safe (94) | catch on subtle unsafe, density < 0.05 (206) |
+|---|---|---|---|
+| normal tests | 0.00 | 0.00 | 0.00 |
+| single-action | 0.06 [0.04, 0.08] | 0.00 | 0.04 |
+| random sequences | 0.41 [0.39, 0.44] | 0.00 | 0.24 |
+| **transition (contract-derived)** | **0.80 [0.77, 0.82]** | **0.00** | **0.69** |
+| presence audit | 0.80 [0.76, 0.84] | 0.79 [0.70, 0.87] | 0.70 |
+
+The presence audit's numbers differ sharply by domain: in payments it flags almost everything (catch 1.00, false alarm 0.99); in sessions, where unsafe versions still call the server check, it catches 0.01.
+
+Three new evaluators use an LLM code reviewer (one call per version), pre-registered in [`prereg/reviewer.md`](prereg/reviewer.md):
+
+- **review**: the reviewer reads the contract, the original harness, the new harness and the diff, and says SAFE or UNSAFE.
+- **confirm**: the reviewer proposes up to 5 event sequences it expects to break the new harness; the version is flagged only if one of them actually violates the contract when executed.
+- **hybrid**: the reviewer's sequences first, then the transition suite fills the rest of the same 60-action budget; flagged only on a reproduced violation, so it cannot raise false alarms.
+
+Not yet run with a real reviewer model (455 calls).
+
 ### Dose-response: how much cheaper does the shortcut need to be? (`dose_response.py`)
 
 Runs 1–2 showed no erosion when the safe design was also cheap. Run 3 showed 12/15 unsafe when the unsafe design was free and the safe one cost 1.0. That is one data point. The `--cost-gap GAP` flag on `llm_edits.py` and `self_agent.py` makes the cost gap continuously configurable: it scales every server-facing call cost to `GAP` (above 0, up to 1.0) while keeping tension mode on (no revoke notifications). Small gaps make skipping safety barely cheaper; at `GAP=1.0` the setup matches run 3. `GAP=0` is rejected: the seed would already cost 0, so the gate (strictly cheaper only) could never accept anything and the model would be asked to lower a cost of 0.00. The model's API doc shows the scaled costs, so it can reason about the tradeoff.
@@ -359,6 +385,8 @@ replicate.py     aggregate runs with bootstrap 95% CIs over runs
 dose_response.py dose-response: aggregate runs by cost gap, with CIs and plot
 check_churn.py   checks churn traffic against planted safe and unsafe variants
 churn_report.py  churn experiment: aggregate runs by (churn, visibility) with CIs
+corpus.py        builds the deduplicated, exhaustively labeled corpus of harness versions
+review_eval.py   scores all evaluators, including an LLM reviewer and review-guided tests, on the corpus
 sessions.py      domain 2: session tokens (service, contract, planted variants, evaluators, prompts)
 domains.py       domain registry used by --domain, plus the subtlety metric
 subtlety_report.py   shortest-violation length and violation density for unsafe versions in run folders

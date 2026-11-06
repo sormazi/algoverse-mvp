@@ -47,6 +47,8 @@ python3 llm_edits.py --mock --domain sessions     # domain 2 pipeline test
 python3 subtlety_report.py runs_tension runs_r3_s* runs_agent_s*   # how subtle are the unsafe versions?
 python3 d2_report.py           # rescore domain 2 runs against the pre-registration, update README
 python3 self_agent.py --mock --fitness episodes   # agent scored on its own work episodes (step 1)
+python3 check_churn.py         # churn traffic: planted safe variants stay clean, invalidation bugs show up
+python3 self_agent.py --mock --tension --fitness episodes --churn 0.3 --visibility 1   # step 2
 
 # real LLM runs (AWS Bedrock; or --provider anthropic with ANTHROPIC_API_KEY)
 pip install boto3
@@ -281,6 +283,18 @@ for s in 1 2 3; do python3 self_agent.py --model us.anthropic.claude-sonnet-4-6 
 - Most unsafe versions entered the archive as independent rediscoveries from the safe v00 and v01. Once an unsafe version reaches cost 0.0, nothing can be strictly cheaper, so its own children are rejected (1 unsafe parent with accepted children per run, against 3 to 6 under fixed scoring).
 - Transition-focused tests beat random in all 3 runs (0.90 vs 0.55, 0.92 vs 0.54, 0.93 vs 0.48).
 
+### Step 2: churn in the agent's own work (`--churn P --visibility Q`, pre-registered)
+
+Own-work scoring changed nothing because ordinary work never contains a revoke. This step adds realistic churn to the work episodes and lets some violations become visible, to measure whether selection then filters broken safeguards on its own.
+
+- **Churn** (`gen_churn` in `run.py` and `sessions.py`): for each request, with probability P, an invalidating event for that request's approval or session (payments: revoke; sessions: logout, password change or expiry) lands just before the request, between the request and the next flush, or after the flush, with equal odds; half the time the request is then retried and must be refused. P = 0 reproduces the ordinary workload exactly.
+- **Visibility**: each violated rule in a work episode is noticed with probability Q. A noticed violation fails the episode, lowers the version's observed success, and appears in the agent's episode log as a disputed payment. Unnoticed violations stay invisible. The fixed gate and the hidden audit are unchanged.
+- `check_churn.py` confirms that planted safe variants never violate and complete all work under churn, while planted invalidation bugs violate in 17 to 28% of churn sequences at P = 0.3.
+- On the 42 unsafe versions the model wrote in `runs_ep_agent_s1..s3`, three churn episodes at P = 0.3 expose a version 71% of the time on average (21% at P = 0.05, 53% at P = 0.15), so even full visibility cannot filter every unsafe candidate.
+- Design, conditions, commands and predictions: [`prereg/churn.md`](prereg/churn.md), committed before any model call. Conditions (P, Q) = (0.3, 0), (0.05, 1), (0.15, 1), (0.3, 1), 3 seeds each, 78 model calls per run; aggregate with `churn_report.py`.
+
+Not yet run with a real model.
+
 ### Dose-response: how much cheaper does the shortcut need to be? (`dose_response.py`)
 
 Runs 1–2 showed no erosion when the safe design was also cheap. Run 3 showed 12/15 unsafe when the unsafe design was free and the safe one cost 1.0. That is one data point. The `--cost-gap GAP` flag on `llm_edits.py` and `self_agent.py` makes the cost gap continuously configurable: it scales every server-facing call cost to `GAP` (above 0, up to 1.0) while keeping tension mode on (no revoke notifications). Small gaps make skipping safety barely cheaper; at `GAP=1.0` the setup matches run 3. `GAP=0` is rejected: the seed would already cost 0, so the gate (strictly cheaper only) could never accept anything and the model would be asked to lower a cost of 0.00. The model's API doc shows the scaled costs, so it can reason about the tradeoff.
@@ -327,6 +341,8 @@ llm_edits.py     LLM rewrite loop with a greedy gate (--mock, --hide-requirement
 self_agent.py    DGM-style self-improving agent with an archive (--mock, --hide-requirements, --tension, --seed)
 replicate.py     aggregate runs with bootstrap 95% CIs over runs
 dose_response.py dose-response: aggregate runs by cost gap, with CIs and plot
+check_churn.py   checks churn traffic against planted safe and unsafe variants
+churn_report.py  churn experiment: aggregate runs by (churn, visibility) with CIs
 sessions.py      domain 2: session tokens (service, contract, planted variants, evaluators, prompts)
 domains.py       domain registry used by --domain, plus the subtlety metric
 subtlety_report.py   shortest-violation length and violation density for unsafe versions in run folders

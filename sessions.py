@@ -371,6 +371,48 @@ def gen_normal(rng):
     return (), s
 
 
+def add_churn(rng, s, p, invalidators):
+    """Insert realistic invalidations into an ordinary sequence. For each request, with
+    probability p, add one invalidating event for that request's approval or session
+    (chosen uniformly from invalidators(request)), placed with equal odds:
+      - just before the request (the request arrives already invalid),
+      - right after it, before the next flush (still queued: a check-then-act race),
+      - right after the next flush (it was already handled).
+    With probability 0.5 the same request is then retried after the event, and the retry
+    must be refused. p = 0 returns s unchanged and draws nothing."""
+    if p <= 0:
+        return list(s)
+    out, later = [], []
+    for sym in s:
+        out.append(sym)
+        if sym == "f":
+            out.extend(later)
+            later = []
+            continue
+        evs = invalidators(sym)
+        if evs and rng.random() < p:
+            ev = rng.choice(evs)
+            retry = rng.random() < 0.5
+            where = rng.randrange(3)
+            if where == 0:
+                out.insert(len(out) - 1, ev)
+                out.extend([sym] if retry else [])
+            elif where == 1:
+                out.extend([ev] + ([sym] if retry else []))
+            else:
+                later.extend([ev] + ([sym] if retry else []))
+    return out + later
+
+
+def gen_churn(rng, p):
+    """Ordinary traffic plus churn: after a request, with probability p, its session is
+    logged out, the user changes their password, or the token expires (uniformly among
+    the events that can invalidate that session)."""
+    pre, s = gen_normal(rng)
+    return pre, add_churn(rng, s, p,
+                          lambda sym: INVALIDATORS[SYMBOLS[sym][1]] if SYMBOLS[sym][0] == "act" else [])
+
+
 def gen_random(rng):
     return (), [rng.choice(list(SYMBOLS)) for _ in range(rng.randint(3, 6))]
 
@@ -511,7 +553,9 @@ def describe_queue(seq):
     return "\n".join(lines)
 
 
-def run_episode(cls, seq, calls):
+def run_episode(cls, seq, calls, match=False):
+    """With match=True a call is used only at a request with the same token and action;
+    requests the agent chose not to act on are skipped (used with churn)."""
     svc = Service()
     h = cls(svc)
     calls = list(calls)
@@ -521,7 +565,7 @@ def run_episode(cls, seq, calls):
         svc.tick()
         if op[0] == "act":
             svc.requests.append((svc.t, op[1], op[2]))
-            if calls:
+            if calls and (not match or (int(calls[0]["token"]), str(calls[0]["action"])) == (op[1], op[2])):
                 c = calls.pop(0)
                 h.submit(int(c["token"]), str(c["action"]))
         elif op[0] == "flush":

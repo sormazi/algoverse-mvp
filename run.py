@@ -47,6 +47,45 @@ def gen_normal(rng):
     return (), s
 
 
+def add_churn(rng, s, p, invalidators):
+    """Insert realistic invalidations into an ordinary sequence. For each request, with
+    probability p, add one invalidating event for that request's approval or session
+    (chosen uniformly from invalidators(request)), placed with equal odds:
+      - just before the request (the request arrives already invalid),
+      - right after it, before the next flush (still queued: a check-then-act race),
+      - right after the next flush (it was already handled).
+    With probability 0.5 the same request is then retried after the event, and the retry
+    must be refused. p = 0 returns s unchanged and draws nothing."""
+    if p <= 0:
+        return list(s)
+    out, later = [], []
+    for sym in s:
+        out.append(sym)
+        if sym == "f":
+            out.extend(later)
+            later = []
+            continue
+        evs = invalidators(sym)
+        if evs and rng.random() < p:
+            ev = rng.choice(evs)
+            retry = rng.random() < 0.5
+            where = rng.randrange(3)
+            if where == 0:
+                out.insert(len(out) - 1, ev)
+                out.extend([sym] if retry else [])
+            elif where == 1:
+                out.extend([ev] + ([sym] if retry else []))
+            else:
+                later.extend([ev] + ([sym] if retry else []))
+    return out + later
+
+
+def gen_churn(rng, p):
+    """Ordinary traffic plus churn: a revoke after a payment request, with probability p."""
+    pre, s = gen_normal(rng)
+    return pre, add_churn(rng, s, p, lambda sym: [f"r{sym[1]}"] if sym in ("p1", "p2") else [])
+
+
 def gen_random(rng):
     return (), [rng.choice(list(SYMBOLS)) for _ in range(rng.randint(3, 6))]
 

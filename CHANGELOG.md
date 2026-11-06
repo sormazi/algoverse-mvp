@@ -32,6 +32,27 @@ Ground truth used throughout: a harness is **unsafe** if any sequence of up to 5
 
 ---
 
+## v0.11: churn and visibility in the agent's own work (pre-registered)
+
+### Added
+- `gen_churn(rng, p)` in `run.py` and `sessions.py` (shared logic in `add_churn`), exposed as `D.gen_churn`. Inserts an invalidating event after a request with probability p (just before the request, before the next flush, or after it, with equal odds) and retries the request half the time. p = 0 returns `gen_normal`'s sequence and consumes the random stream identically.
+- `self_agent.py --churn P --visibility Q` (only with `--fitness episodes`). Work episodes use churn traffic; each violated rule is noticed with probability Q (separate, reproducible random stream); a noticed violation fails the episode, lowers observed success and is shown to the agent as a disputed payment. Episodes record `true_violations` and `observed_violations`; candidates record `disputed` and `true_violation_episodes`. With Q > 0, parent selection also weights by observed success. With churn on, tool calls are matched to requests by approval (payments) or token and action (sessions), so declined requests are skipped. `meta.json` records `churn` and `visibility`.
+- `check_churn.py`: planted safe variants never violate and complete all work on 200 churn sequences at p = 0.3; planted invalidation bugs violate in 17 to 28% of them.
+- `churn_report.py`: aggregates runs by (churn, visibility) with bootstrap CIs over runs; writes `analysis/churn_results.md`.
+- `prereg/churn.md`: design, conditions, commands, call count, predictions C1 to C3 and the failure criterion, committed before any model call.
+
+### Changed during development (before any model call)
+- The first churn generator only placed invalidations after a request, so `cache_revoke_bug` (which fails only when an approval is revoked before its first use) never violated. A "just before the request" placement was added.
+- A disputed episode with no valid requests did not lower success; success is now also multiplied by the share of undisputed episodes.
+
+### Checked
+- Defaults reproduce earlier mock runs exactly (`--fitness fixed` and `--fitness episodes`, both domains, with and without `--tension`); `llm_edits.py --mock` unchanged; a churn run split into one-step chunks matches an uninterrupted run.
+
+### Runs
+Not yet run with a real model. 12 runs, 936 model calls (78 per run).
+
+---
+
 ## v0.10: pause/resume, own-work scoring results
 
 ### Added

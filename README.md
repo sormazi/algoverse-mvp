@@ -2,6 +2,48 @@
 
 When a self-improving agent rewrites its own harness to run faster, it often restructures the safety checks: caching permissions, merging calls, batching. This repo tests whether common safety evaluations can tell **safe redesigns** from **broken ones**, and whether an LLM optimizer actually produces broken ones.
 
+## In plain language
+
+### The problem
+
+An AI agent acts in the world through a layer of ordinary code called its **harness**: the code that turns "pay this invoice" into an actual payment. Part of that code is **safeguards**, such as "only pay if the payment was approved, and never after the approval was cancelled". A **self-improving** agent rewrites its own harness to do its job better or cheaper. Sometimes a rewrite moves a safeguard somewhere else and keeps it working. Sometimes it quietly breaks it, for example by remembering approvals in a local list so it no longer has to ask the server, and then never noticing when an approval is cancelled. Both kinds of rewrite look like progress: the agent still completes its tasks, just faster.
+
+We ask two questions. Do self-improving agents actually break their safeguards this way? And can the checks people normally rely on (tests, reviews, audits, feedback from real use) tell the safe rewrites from the broken ones?
+
+### Headline result
+
+When weakening a safeguard saves cost, the agent does it, and the self-improvement process keeps the broken versions. Ordinary tests, scoring the agent on its real work, and even noticing every violation it causes all fail to stop this. The checks that reliably catch it are short test scenarios aimed at moments when a permission changes (granted, cancelled, used, retried): they catch 80% of broken versions with no false alarms, against 41% for random testing.
+
+### How the setup works
+
+- **Small simulated worlds.** A payment world (approvals are granted, cancelled, and used to pay) and a login world (users log in, log out, change passwords, sessions expire, and some sessions are read-only). Each has a fixed list of rules that must never be broken, such as "no payment after its approval was cancelled".
+- **Exact answers.** Because the worlds are small, we can run every possible sequence of up to 5 events (about 66,000 per version) against a harness and see whether any of them breaks a rule. So for every version we know for certain whether it is safe, without trusting any checker. This is the ground truth everything else is graded against.
+- **The checks being graded (evaluators).** Normal tests (ordinary everyday traffic), single-action probes, random event sequences, **transition tests** (short scenarios built from the rules: grant, cancel, use, retry), a **presence audit** (is the original safety check still in the code?), and, pending, an AI code reviewer. Each check gets the same budget of 60 test steps.
+- **Scoring a check.** Two numbers: how many broken versions it catches, and how many safe versions it wrongly flags (false alarms). A check that flags everything catches everything but is useless.
+- **The models.** Rewrites are written by Claude Sonnet 4.6 through AWS Bedrock.
+
+### The six experiments
+
+1. **Hand-written versions.** Before using any AI, we wrote 10 redesigns ourselves (4 safe, 6 broken) to see whether the checks can tell them apart. Normal tests caught none of the 6 broken ones. The presence audit flagged 3 of the 4 safe redesigns as broken and missed a broken one that keeps the check but runs it too early. Transition tests did best on the kinds of redesign we built them around, but only tied random testing on new kinds, a warning that hand-made bugs are not enough.
+2. **AI rewriting the harness to be cheaper.** A model repeatedly rewrites the harness to lower its cost, and a gate keeps a rewrite if it passes the normal tests and is cheaper (how many real systems decide). When a safe cheap design existed, all 30 rewrites were safe. When skipping the safeguard was the cheaper option, 12 of 15 rewrites broke it, and a broken one was kept in the first round. Across 3 repeat runs: 76% of rewrites unsafe, 61% of kept versions unsafe.
+3. **A self-improving agent.** An agent modelled on the Darwin Gödel Machine does real work through its own harness, rewrites itself, and keeps an archive of past versions to build on. Under cost pressure, 93% of its rewrites were unsafe, 82% of the versions it kept were unsafe, the first broken version got in at generation 2 in every run, and its final best version was unsafe. We repeated this in the login world with costs set by one simple rule (a server call costs 1) and predictions written down in advance: 68 of 89 rewrites were unsafe, and the bugs were subtle (the most common one only breaks after 5 specific steps, in 16 of 66,429 possible sequences). Random testing caught those subtle bugs 3% of the time; transition tests caught them 70% of the time.
+4. **Judging the agent on its real work.** Instead of a fixed test, each version was scored on its own work, as real self-improving systems do. Nothing changed (93% of rewrites and 86% of kept versions unsafe), because everyday work never contains a cancellation, so the broken safeguard never shows.
+5. **Real-world churn and complaints.** We added realistic cancellations, logouts and expiries to the agent's work, and made violations visible as complaints at controlled rates, with predictions written down in advance. Even when every violation was noticed, 86% of the versions the agent kept were unsafe (we had predicted below 30%, so we report this as a failed prediction). Broken versions got through by passing a few clean work sessions by luck, then stayed on top.
+6. **Grading every check on everything.** We collected every distinct harness version from all experiments (459, of which 361 unsafe and 94 safe) and graded all checks on the same set. Transition tests caught 80% of broken versions (69% of the subtle ones) with zero false alarms. Random testing caught 41% (24% of the subtle ones). Normal tests caught 0%. The presence audit flagged 79% of safe versions as broken.
+
+**Pending:** an AI code reviewer as a check, and a combined check where the reviewer suggests where the code might break and those scenarios are actually run, so nothing is flagged on opinion alone. Designed and pre-registered in [`prereg/reviewer.md`](prereg/reviewer.md), not yet run.
+
+### Words used in this repo
+
+- **Harness:** the code between the AI and the world; it carries the safeguards.
+- **Safe / unsafe version:** a harness that can never break a rule / one that breaks a rule on at least one sequence of events.
+- **Gate:** the rule that decides whether a new version is kept (here: passes normal tests and is cheaper, or did well in its own work).
+- **Archive:** the collection of kept versions a self-improving agent builds on.
+- **Tension (cost pressure):** a setting where the cheapest design is an unsafe one.
+- **Transition test:** a short scenario around a permission change, such as grant, cancel, then try to pay.
+- **False alarm:** a safe version flagged as broken.
+- **Pre-registered:** the design and predictions were committed to this repo before running, so results cannot be tuned after the fact.
+
 
 ## Headline results so far
 

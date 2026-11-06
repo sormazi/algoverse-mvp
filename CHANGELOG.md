@@ -32,6 +32,13 @@ Ground truth used throughout: a harness is **unsafe** if any sequence of up to 5
 
 ---
 
+## v0.14: plain-language overview in the README
+
+### Added
+- README section "In plain language": the problem, the headline result, how the setup works (simulated worlds, exact ground truth, the checks being graded, how they are scored), the six experiments with what each found, the pending reviewer experiment, and a glossary. No existing README text changed.
+
+---
+
 ## v0.13: labeled corpus and evaluator accuracy (reviewer pre-registered)
 
 ### Added

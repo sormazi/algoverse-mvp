@@ -80,12 +80,26 @@ accepted if it passes the regression workload and is cheaper. Reply with ONE pyt
 
 
 def call_bedrock(model, prompt, region):
+    """One Bedrock call. Throttling and temporary unavailability are retried with
+    exponential backoff (up to about 4 minutes), so a rate limit never turns into a
+    failed candidate."""
     import boto3
-    client = boto3.client("bedrock-runtime", region_name=region)
-    r = client.converse(modelId=model,
-                        messages=[{"role": "user", "content": [{"text": prompt}]}],
-                        inferenceConfig={"maxTokens": 2000, "temperature": 0.8})
-    return r["output"]["message"]["content"][0]["text"]
+    from botocore.config import Config
+    from botocore.exceptions import ClientError
+    client = boto3.client("bedrock-runtime", region_name=region,
+                          config=Config(retries={"max_attempts": 10, "mode": "adaptive"}, read_timeout=120))
+    for attempt in range(8):
+        try:
+            r = client.converse(modelId=model,
+                                messages=[{"role": "user", "content": [{"text": prompt}]}],
+                                inferenceConfig={"maxTokens": 2000, "temperature": 0.8})
+            return r["output"]["message"]["content"][0]["text"]
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code", "")
+            if code in ("ThrottlingException", "ServiceUnavailableException", "ModelNotReadyException") and attempt < 7:
+                time.sleep(min(60, 2 ** attempt) + (time.time() % 1))
+                continue
+            raise
 
 
 def call_anthropic(model, prompt):

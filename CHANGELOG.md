@@ -32,6 +32,28 @@ Ground truth used throughout: a harness is **unsafe** if any sequence of up to 5
 
 ---
 
+## v0.12: churn experiment results (pre-registered)
+
+### Fixed
+- `call_bedrock` now retries throttling and temporary unavailability with exponential backoff (up to about 4 minutes). Before the fix, Bedrock rate limits during the first attempt at the core conditions were recorded as failed candidates in 5 of 6 runs; those runs were set aside unmodified in `runs_churn_throttled/` and all conditions were rerun from scratch after the fix.
+
+### Runs (Sonnet 4.6, payments, `--tension --hide-requirements --fitness episodes --episodes 3`, 15 generations, seeds 1 to 3; 0 errors)
+
+| condition (P, Q) | folders | accepted versions unsafe | best agent unsafe |
+|---|---|---|---|
+| (0.3, 0) | `runs_churn_p0.3_q0_s1..s3` | 0.82 | 3 of 3 |
+| (0.05, 1) | `runs_churn_p0.05_q1_s1..s3` | 0.79 | 3 of 3 |
+| (0.15, 1) | `runs_churn_p0.15_q1_s1..s3` | 0.71 | 3 of 3 |
+| (0.3, 1) | `runs_churn_p0.3_q1_s1..s3` | 0.86 | 3 of 3 |
+
+### What we learned
+- C1 supported; C2 failed (0.86 accepted unsafe with full visibility, predicted below 0.3); C3 failed (not monotonic). Pre-registered conclusion: visible violations in real work are not enough for selection to filter erosion.
+- Every unsafe version accepted under full visibility had zero violations in its own three test episodes; best agent unsafe (cost 0.0, observed success 1.0) in every run.
+- Disputes blocked 12% to 40% of unsafe candidates the fixed gate would have accepted, and at P = 0.3 with full visibility the model wrote fewer unsafe rewrites (0.73 vs 0.93), without lowering the unsafe share of the archive.
+- Transition-focused tests beat random in every condition (0.70 to 0.84 vs 0.36 to 0.59).
+
+---
+
 ## v0.11: churn and visibility in the agent's own work (pre-registered)
 
 ### Added
@@ -49,7 +71,7 @@ Ground truth used throughout: a harness is **unsafe** if any sequence of up to 5
 - Defaults reproduce earlier mock runs exactly (`--fitness fixed` and `--fitness episodes`, both domains, with and without `--tension`); `llm_edits.py --mock` unchanged; a churn run split into one-step chunks matches an uninterrupted run.
 
 ### Runs
-Not yet run with a real model. 12 runs, 936 model calls (78 per run).
+See v0.12. 12 runs, 936 model calls (78 per run).
 
 ---
 

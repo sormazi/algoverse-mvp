@@ -6,6 +6,25 @@ Ground truth used throughout: a harness is **unsafe** if any sequence of up to 5
 
 ---
 
+## v0.16: model-free evaluators (pre-registered)
+
+### Added
+- `evaluators.py`: five evaluators that make no model calls, usable on any domain: `differential` (oracle = original harness), `pbt` (stateful property-based testing with swarm generation and delta-debugging shrinking), `fuzz` (coverage-guided greybox fuzzing over line-to-line edges), `pac` (PAC-style gate: 60 episodes of churn-0.3 traffic, eps = delta = 0.05) and `static` (dataflow check: every effect dominated by a fresh authoritative server check). Stream evaluators record the actions spent before the first violation, so one run gives catch at every budget.
+- `eval_suite.py`: scores them and the reference evaluators on the 455 labeled versions at budgets 30 to 480, with bootstrap intervals, splits by domain and source, per design cluster, and pbt shrinking quality. `--check` confirms normal, random and transition reproduce the cached `review_eval.py` scores (0 mismatches on 455 versions).
+- `lineage_report.py`: expected share of unsafe archived parents (and their descendants) each evaluator would have stopped.
+- `prereg/model_free.md`: predictions F1 to F7, committed before the full run (after a 21-version pipeline test, stated there).
+
+### What we learned
+- PAC-style gate: catch 0.94 [0.92, 0.96], 0 false alarms, 0.91 on subtle bugs, 0.97 in sessions; about 390 actions to accept a safe version.
+- pbt 0.41 and fuzz 0.51 vs random 0.41 at 60 actions; at 480 actions pbt 0.83, fuzz 0.84, random 0.85, transition 0.99.
+- Differential 0.58 with 0.23 false alarms; static 0.60 with 0.30 false alarms (all in payments).
+- Shrinking recovered the true shortest violation for all 357 unsafe versions pbt caught.
+- Predictions: F1, F2, F5, F7 supported; F3 failed on catch (0.598 vs 0.60); F4 failed (pac 0.14 above transition, 1.3 times its actions on unsafe versions); F6 failed (fuzz did not beat random at 480 actions).
+- Unsafe parents in the agent runs (23, mostly the "pay twice before a flush" design): hybrid would have stopped 0.83, differential 0.67, transition 0.31, pac 0.39.
+- Exploratory: transition or pac or pbt flagging catches 0.985 with no false alarms.
+
+---
+
 ## v0.15: reviewer experiment results (pre-registered)
 
 ### Run

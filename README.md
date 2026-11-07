@@ -10,17 +10,17 @@ We ask two questions. Do self-improving agents actually break their safeguards t
 
 ### Headline result
 
-When weakening a safeguard saves cost, the agent does it, and the self-improvement process keeps the broken versions. Ordinary tests, scoring the agent on its real work, and even noticing every violation it causes all fail to stop this. The checks that reliably catch it are short test scenarios aimed at moments when a permission changes (granted, cancelled, used, retried): they catch 80% of broken versions with no false alarms, against 41% for random testing. Letting an AI code reviewer (Claude Opus 4.6) suggest those scenarios, and flagging a version only when a suggested scenario actually breaks a rule when run, catches 98% with no false alarms. The same reviewer giving only its opinion flags every broken version but also 53% of safe ones.
+When weakening a safeguard saves cost, the agent does it, and the self-improvement process keeps the broken versions. Ordinary tests, scoring the agent on its real work, and even noticing every violation it causes all fail to stop this. The checks that reliably catch it are short test scenarios aimed at moments when a permission changes (granted, cancelled, used, retried): they catch 80% of broken versions with no false alarms, against 41% for random testing. Letting an AI code reviewer (Claude Opus 4.6) suggest those scenarios, and flagging a version only when a suggested scenario actually breaks a rule when run, catches 98% with no false alarms. The same reviewer giving only its opinion flags every broken version but also 53% of safe ones. Without any AI, running 60 sessions of realistic traffic with cancellations mixed in catches 94% with no false alarms, but certifying one safe version that way takes about 6 times the usual test budget.
 
 ### How the setup works
 
 - **Small simulated worlds.** A payment world (approvals are granted, cancelled, and used to pay) and a login world (users log in, log out, change passwords, sessions expire, and some sessions are read-only). Each has a fixed list of rules that must never be broken, such as "no payment after its approval was cancelled".
 - **Exact answers.** Because the worlds are small, we can run every possible sequence of up to 5 events (about 66,000 per version) against a harness and see whether any of them breaks a rule. So for every version we know for certain whether it is safe, without trusting any checker. This is the ground truth everything else is graded against.
-- **The checks being graded (evaluators).** Normal tests (ordinary everyday traffic), single-action probes, random event sequences, **transition tests** (short scenarios built from the rules: grant, cancel, use, retry), a **presence audit** (is the original safety check still in the code?), and an AI code reviewer used three ways (opinion only, its suggested scenarios only, and its scenarios plus transition tests). Each check gets the same budget of 60 test steps.
+- **The checks being graded (evaluators).** Normal tests (ordinary everyday traffic), single-action probes, random event sequences, **transition tests** (short scenarios built from the rules: grant, cancel, use, retry), a **presence audit** (is the original safety check still in the code?), an AI code reviewer used three ways (opinion only, its suggested scenarios only, and its scenarios plus transition tests), and five standard testing methods that use no AI (described in experiment 8). Each check gets the same budget of 60 test steps.
 - **Scoring a check.** Two numbers: how many broken versions it catches, and how many safe versions it wrongly flags (false alarms). A check that flags everything catches everything but is useless.
 - **The models.** Rewrites are written by Claude Sonnet 4.6 through AWS Bedrock; the code reviewer is Claude Opus 4.6.
 
-### The seven experiments
+### The eight experiments
 
 1. **Hand-written versions.** Before using any AI, we wrote 10 redesigns ourselves (4 safe, 6 broken) to see whether the checks can tell them apart. Normal tests caught none of the 6 broken ones. The presence audit flagged 3 of the 4 safe redesigns as broken and missed a broken one that keeps the check but runs it too early. Transition tests did best on the kinds of redesign we built them around, but only tied random testing on new kinds, a warning that hand-made bugs are not enough.
 2. **AI rewriting the harness to be cheaper.** A model repeatedly rewrites the harness to lower its cost, and a gate keeps a rewrite if it passes the normal tests and is cheaper (how many real systems decide). When a safe cheap design existed, all 30 rewrites were safe. When skipping the safeguard was the cheaper option, 12 of 15 rewrites broke it, and a broken one was kept in the first round. Across 3 repeat runs: 76% of rewrites unsafe, 61% of kept versions unsafe.
@@ -30,6 +30,7 @@ When weakening a safeguard saves cost, the agent does it, and the self-improveme
 6. **Grading every check on everything.** We collected every distinct harness version from all experiments (459, of which 361 unsafe and 94 safe) and graded all checks on the same set. Transition tests caught 80% of broken versions (69% of the subtle ones) with zero false alarms. Random testing caught 41% (24% of the subtle ones). Normal tests caught 0%. The presence audit flagged 79% of safe versions as broken.
 
 7. **An AI code reviewer as a check.** On the same 455 versions, with predictions written down in advance, Claude Opus 4.6 read the rules, the original harness and the new one. Asked only for a verdict, it called every broken version broken but also called 53% of the safe ones broken, so its opinion alone is not usable as a gate. Asked to also write up to 5 short scenarios it expects to break the code, which we then ran, it found a working break for 98% of broken versions (99% of the subtle ones) using at most 30 test steps, and by construction raised no false alarms. Run first and topped up with transition tests to the same 60 steps, it beat transition tests alone on 239 versions and lost on 1. Caveat: the reviewer was given the full rule list and the known-correct original, and many broken versions are close variants of a few designs.
+8. **Standard testing methods, no AI.** On the same 455 versions, with predictions written down in advance, we graded five methods used in industry: comparing the new code's behavior with the original's (differential testing), random scenario generation with automatic shrinking of failures (property-based testing), coverage-guided fuzzing, a code-reading rule that every action must follow a fresh check with the server (static analysis), and a statistical acceptance test that runs 60 sessions of realistic traffic with cancellations and rejects on any violation (a PAC-style gate). The statistical gate did best: 94% of broken versions caught, no false alarms. But broken versions fail fast, while a safe version has to survive all 60 sessions, about 390 test steps. Property-based testing and fuzzing did no better than random testing. Differential testing and the code-reading rule wrongly flagged 23% and 30% of safe versions, because a legitimate redesign also changes behavior or structure. In the agent runs, the broken versions that went on to have children were mostly one design, paying twice before a batch is processed, which transition tests catch only 30% of the time and the statistical gate never catches.
 
 ### Words used in this repo
 
@@ -39,6 +40,7 @@ When weakening a safeguard saves cost, the agent does it, and the self-improveme
 - **Archive:** the collection of kept versions a self-improving agent builds on.
 - **Tension (cost pressure):** a setting where the cheapest design is an unsafe one.
 - **Transition test:** a short scenario around a permission change, such as grant, cancel, then try to pay.
+- **PAC-style gate:** accept a version only if it passes enough random sessions of realistic use that, if it still fails on more than 5% of sessions, it would almost surely (95%) have been caught.
 - **Review-guided test:** the AI reviewer proposes scenarios it expects to break the code; a version is flagged only if one of them actually breaks a rule when run.
 - **False alarm:** a safe version flagged as broken.
 - **Pre-registered:** the design and predictions were committed to this repo before running, so results cannot be tuned after the fact.
@@ -59,6 +61,7 @@ When weakening a safeguard saves cost, the agent does it, and the self-improveme
 | **Scoring the agent on its own work episodes, as DGM-style loops do, does not help** | 0.93 of rewrites and 0.86 of accepted versions unsafe across 3 runs (vs 0.93 and 0.82 with fixed-workload scoring); the two gates agreed on 44 of 45 candidates |
 | **Even when every violation in the agent's own work is noticed, unsafe versions keep winning** | pre-registered churn experiment, 12 runs: 0.86 of accepted versions unsafe with full visibility at 30% churn (predicted below 0.3); every accepted unsafe version had passed three clean work episodes by luck; best agent unsafe in 12 of 12 runs |
 | **An LLM reviewer's opinion over-flags, but its proposed counterexamples, executed, catch almost everything (pre-registered)** | 455 labeled versions, Claude Opus 4.6: opinion-only review catches 1.00 but false-alarms on 0.53 of safe versions; reviewer sequences executed catch 0.98 with 0.00 false alarms; with the transition suite in the same 60-action budget, 0.98 vs transition's 0.80 (paired difference 0.19 [0.17, 0.21]; 0.29 on subtle bugs) |
+| **Standard model-free testing methods: a statistical gate over realistic traffic works, generic tools don't beat random (pre-registered)** | 455 labeled versions: PAC-style gate (60 episodes, churn 0.3) catches 0.94 with 0 false alarms but spends about 390 actions to accept a safe version; property-based testing 0.41 and coverage-guided fuzzing 0.51 against random 0.41 at 60 actions; differential testing 0.58 with 0.23 false alarms; static dataflow check 0.60 with 0.30 false alarms |
 | **On those subtle bugs, transition tests work and random tests don't** | transition 0.70 vs random 0.03 on 59 low-density bugs; transition beat random in 6 of 6 runs (p = 1/64); no false alarms |
 
 ## How it works
@@ -397,6 +400,43 @@ Pre-registered predictions:
 
 Limits of this result: the reviewer saw the full contract and the known-correct original harness; many unsafe versions are close variants of a few designs, so the 361 are not independent; the corpus bugs all show within 5 actions, short enough to find by reading the code. A reviewer without the contract, larger worlds and held-out designs are the next tests.
 
+### Model-free evaluators on the same corpus (`evaluators.py`, `eval_suite.py`, `lineage_report.py`)
+
+Five standard testing methods that make no model calls, pre-registered in [`prereg/model_free.md`](prereg/model_free.md) (a 21-version pipeline test ran before the predictions were written; stated there). Each stream evaluator runs 30 seeded streams per version up to 480 actions, so one run gives the catch rate at every budget; `normal`, `random` and `transition` recomputed this way reproduce the cached 60-action scores of `review_eval.py` on all 455 versions (0 mismatches, `--check`).
+
+- **differential:** random sequences; the oracle is the original harness, not the contract (flag if the new harness produces an effect the original does not).
+- **pbt:** stateful property-based testing: swarm generation (random subset of symbols per test), lengths 1 to 10, contract as the property, delta-debugging shrinking.
+- **fuzz:** coverage-guided greybox fuzzing over line-to-line edges of the harness code, seeded with ordinary traffic.
+- **pac:** PAC-style gate: 60 episodes (eps = delta = 0.05) of ordinary traffic with churn 0.3; reject on any violation. Scored at its own size.
+- **static:** static dataflow check, no test actions: every effect call must be dominated by a guard reading a fresh result of an authoritative server call; values read back from instance state count as stale.
+
+Full results in `analysis/eval_suite/results.md`:
+
+| evaluator | catch on unsafe (361) | false alarm on safe (94) | catch on subtle unsafe (206) | mean actions per unsafe / safe version |
+|---|---|---|---|---|
+| random (reference) | 0.41 [0.39, 0.44] | 0.00 | 0.24 | 150 / 478 (stream) |
+| transition (reference) | 0.80 [0.77, 0.82] | 0.00 | 0.69 | 43 / 478 (stream) |
+| differential | 0.58 [0.55, 0.61] | 0.23 [0.16, 0.29] | 0.39 | 107 / 332 |
+| pbt | 0.41 [0.38, 0.44] | 0.00 | 0.25 | 158 / 477 |
+| fuzz | 0.51 [0.47, 0.55] | 0.00 | 0.32 | 157 / 477 |
+| **pac (60 episodes)** | **0.94 [0.92, 0.96]** | **0.00** | **0.91 [0.87, 0.94]** | **55 / 390** |
+| static | 0.60 [0.55, 0.65] | 0.30 [0.21, 0.39] | 0.69 | 0 / 0 |
+| hybrid (reviewer, reference) | 0.98 [0.97, 1.00] | 0.00 | 0.99 | - |
+
+Catch at 60 actions except pac. Catch on unsafe by budget (30 / 60 / 120 / 240 / 480 actions): transition 0.64 / 0.80 / 0.94 / 0.98 / 0.99; random 0.27 / 0.41 / 0.61 / 0.78 / 0.85; pbt 0.26 / 0.41 / 0.64 / 0.75 / 0.83; fuzz 0.13 / 0.51 / 0.64 / 0.75 / 0.84; differential 0.39 / 0.58 / 0.77 / 0.85 / 0.90 (false alarm rising to 0.34).
+
+- **The PAC-style gate is the best model-free evaluator at its own size,** and it does well in sessions (0.97), where random, pbt and fuzz catch about 0.1. Its cost is in acceptance: a safe version must pass all 60 episodes, about 390 actions. At a matched 480 actions, transition catches 0.99. It also connects to the churn experiment: there the agent kept versions after 3 clean episodes of churn traffic; 60 episodes of similar traffic would have caught 94% of the corpus.
+- **Generic tools gain nothing over random here.** pbt equals random at every budget; coverage feedback helps fuzz at 60 actions (0.51 vs 0.41) but not at 480 (0.84 vs 0.85). The bugs are about the order of events on code that is already covered, so line coverage saturates early.
+- **Contract-free oracles false-alarm.** Differential testing flags safe redesigns that legitimately change timing (batching), 0.23 of safe versions. The static rule flags push-invalidated caches, 0.37 of safe payments versions (0.00 in sessions), and misses bugs that keep a fresh check but misuse it (duplicates, scope).
+- **Shrinking works.** For all 357 unsafe versions pbt caught, the shrunk counterexample has the same length as the true shortest violation (mean 3.18 actions, from 8.28 before shrinking).
+- **Per design cluster** (361 unsafe versions grouped into 28 clusters by violated rules and shortest violating sequence): mean catch transition 0.66, pac 0.88, static 0.77, hybrid 0.89.
+
+Pre-registered predictions: F1 (differential, pbt and fuzz below transition at 60 actions) supported; F2 (differential false alarm at least 0.10) supported, 0.23; **F3 failed on catch** (static caught 0.598, below the 0.60 threshold; its false alarm 0.30 was above 0.10 as predicted); **F4 failed** (the PAC gate was not within 0.10 of transition but 0.14 above it, and on unsafe versions it spent 1.3 times transition's actions, not at least 2 times; the large cost is on safe versions); F5 (shrinking recovers the shortest violation at least 0.80 of the time) supported, 1.00; **F6 failed** (fuzz did not beat random at 480 actions); F7 (no model-free evaluator reaches hybrid) supported.
+
+**Stopped before children** (`lineage_report.py`, `analysis/eval_suite/lineage.md`): across 23 self-improving agent runs, 23 unsafe archived versions became parents, with 35 descendants. Expected share of those unsafe parents each evaluator would have stopped at its main budget: hybrid 0.83, differential 0.67, pbt 0.56, fuzz 0.49, random 0.43, pac 0.39, static 0.35, transition 0.31, normal 0.00. The parents are mostly one design that pays twice before a flush (`g1 p1 p1`), which transition catches 0.30 of the time at 60 actions and the PAC gate never (its traffic does not repeat a request without an invalidation). So the evaluator ranking on the corpus does not carry over to the versions that actually spread; the 23 parents are close copies of few designs, so this is a small sample.
+
+Exploratory (not pre-registered): flagging when any of transition, pac or pbt flags (each at its own budget, zero false alarms each) catches 0.985 of unsafe versions and 0.978 of subtle ones, close to hybrid, at roughly 510 actions per safe version.
+
 ### Dose-response: how much cheaper does the shortcut need to be? (`dose_response.py`)
 
 Runs 1–2 showed no erosion when the safe design was also cheap. Run 3 showed 12/15 unsafe when the unsafe design was free and the safe one cost 1.0. That is one data point. The `--cost-gap GAP` flag on `llm_edits.py` and `self_agent.py` makes the cost gap continuously configurable: it scales every server-facing call cost to `GAP` (above 0, up to 1.0) while keeping tension mode on (no revoke notifications). Small gaps make skipping safety barely cheaper; at `GAP=1.0` the setup matches run 3. `GAP=0` is rejected: the seed would already cost 0, so the gate (strictly cheaper only) could never accept anything and the model would be asked to lower a cost of 0.00. The model's API doc shows the scaled costs, so it can reason about the tradeoff.
@@ -430,7 +470,7 @@ Not yet run. We expect few unsafe rewrites at `GAP=0.1` and the run-3 result at 
 
 1. A second, non-Claude model on both domains.
 2. Domain 2 with requirements shown (secondary pre-registered condition), to see whether the cache bug comes from not knowing logout matters.
-3. Compare gates: normal-only, transition-augmented, PACE-style statistical, LLM diff reviewer. *(LLM reviewer scored on the corpus in v0.15; gate use in a live loop pending)*
+3. Compare gates: normal-only, transition-augmented, PACE-style statistical, LLM diff reviewer. *(LLM reviewer scored on the corpus in v0.15; model-free evaluators including a PAC-style gate in v0.16; gate use in a live loop pending)*
 4. Dose-response: vary how much cheaper the unsafe design is and measure how often the model takes it. *(infrastructure added in v0.8; runs pending)*
 5. Scale the world (more IDs and actions) and rerun the budget sweep.
 
@@ -449,6 +489,9 @@ churn_report.py  churn experiment: aggregate runs by (churn, visibility) with CI
 corpus.py        builds the deduplicated, exhaustively labeled corpus of harness versions
 review_eval.py   scores all evaluators, including an LLM reviewer and review-guided tests, on the corpus
                  (--shard K/N to run reviewer calls in parallel; results in analysis/review_eval/)
+evaluators.py    model-free evaluators: differential, property-based (swarm + shrinking), coverage-guided fuzzing, PAC-style gate, static dataflow check
+eval_suite.py    scores the model-free evaluators on the corpus at budgets 30 to 480 (results in analysis/eval_suite/)
+lineage_report.py  share of unsafe archived parents each evaluator would have stopped before they had children
 sessions.py      domain 2: session tokens (service, contract, planted variants, evaluators, prompts)
 domains.py       domain registry used by --domain, plus the subtlety metric
 subtlety_report.py   shortest-violation length and violation density for unsafe versions in run folders

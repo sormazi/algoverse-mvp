@@ -26,6 +26,7 @@ Usage
   python3 review_eval.py --model <bedrock model id>     # real reviewer
   python3 review_eval.py ... --limit 200                # stratified sample of versions
   python3 review_eval.py ... --time-budget 150          # chunk; rerun to continue
+  python3 review_eval.py ... --shard 0/6                # parallel workers; then run once without --shard
 """
 import argparse, difflib, inspect, json, os, random, re, sys, time
 import testbed, sessions, domains, llm_edits
@@ -90,11 +91,17 @@ def seed_code(D):
 
 
 def parse_review(text, symbols):
-    m = re.search(r"\{.*\}", text, re.S)
-    try:
-        obj = json.loads(m.group(0)) if m else {}
-    except Exception:
-        obj = {}
+    """Take the last JSON object in the reply that has a "verdict" field (replies often
+    reason in prose, with braces, before the final JSON)."""
+    obj, dec = {}, json.JSONDecoder()
+    for i in reversed([m.start() for m in re.finditer(r"\{", text)]):
+        try:
+            cand, _ = dec.raw_decode(text[i:])
+        except Exception:
+            continue
+        if isinstance(cand, dict) and "verdict" in cand:
+            obj = cand
+            break
     verdict = str(obj.get("verdict", "")).upper()
     seqs, total = [], 0
     for s in obj.get("sequences", []) or []:
@@ -204,6 +211,9 @@ def main():
     ap.add_argument("--corpus", default="analysis/corpus.jsonl")
     ap.add_argument("--limit", type=int, default=None, help="stratified sample size (planted versions always kept)")
     ap.add_argument("--time-budget", type=float, default=None)
+    ap.add_argument("--shard", default=None, metavar="K/N",
+                    help="only process every N-th version starting at K (parallel workers share the cache); "
+                         "run once more without --shard to assemble the results")
     ap.add_argument("--out", default="analysis/review_eval")
     a = ap.parse_args()
     if not a.mock and not a.model:
@@ -215,7 +225,11 @@ def main():
     items = [x for x in items if x["label"] in ("safe", "unsafe")]
     if a.limit:
         items = stratified(items, a.limit)
-    json.dump(dict(model=a.model or "mock", n=len(items), limit=a.limit, budget=BUDGET, seeds=SEEDS),
+    if a.shard:
+        k, n = map(int, a.shard.split("/"))
+        items = [x for i, x in enumerate(items) if i % n == k]
+    else:
+        json.dump(dict(model=a.model or "mock", n=len(items), limit=a.limit, budget=BUDGET, seeds=SEEDS),
               open(f"{a.out}/meta.json", "w"), indent=1)
     rows = []
     for x in items:
@@ -234,6 +248,7 @@ def main():
         rp = f"{a.out}/reviews/{x['id']}.json"
         if os.path.exists(rp):
             rev = json.load(open(rp))
+            rev.update(parse_review(rev["reply"], D.SYMBOLS))     # always re-parse the cached reply
         else:
             if a.mock:
                 reply = mock_review(x, D)
@@ -259,6 +274,9 @@ def main():
                          violation_density=x.get("violation_density"), shortest_len=x.get("shortest_len"),
                          verdict=rev["verdict"], parsed=rev["parsed"], n_seqs=len(rev["sequences"]),
                          scores=scores))
+    if a.shard:
+        print(f"shard {a.shard} done: {len(rows)} versions", file=sys.stderr)
+        return
     with open(f"{a.out}/rows.jsonl", "w") as fh:
         for r in rows:
             fh.write(json.dumps(r) + "\n")

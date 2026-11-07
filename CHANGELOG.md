@@ -6,6 +6,26 @@ Ground truth used throughout: a harness is **unsafe** if any sequence of up to 5
 
 ---
 
+## v0.15: reviewer experiment results (pre-registered)
+
+### Run
+- `review_eval.py --model us.anthropic.claude-opus-4-6-v1` on all 455 labeled versions: 455 reviewer calls, one per version, cached in `analysis/review_eval/reviews/`. Results in `analysis/review_eval/results.md`, `rows.jsonl`, `meta.json`.
+
+### Added
+- `review_eval.py --shard K/N`: runs a subset of versions so several processes can make reviewer calls in parallel; a final run without `--shard` assembles the results from the caches (no new calls).
+
+### Fixed (implementation, not design)
+- Reply parser: replies often reason in prose with braces before the final JSON, and the earlier greedy match left 26 of the first 117 replies unparsed. It now takes the last JSON object with a "verdict" field, and cached replies are re-parsed on load. All 455 parse.
+
+### What we learned
+- Opinion-only review: catch 1.00, false alarm 0.53 [0.43, 0.63] (0.49 payments, 0.68 sessions). It answered UNSAFE on 411 of 455 versions.
+- Confirm (reviewer sequences executed, at most 30 actions): catch 0.98 [0.97, 0.99], 0.99 on subtle bugs, no false alarms.
+- Hybrid (reviewer sequences plus transition, 60 actions): catch 0.98 vs transition 0.80; paired difference 0.19 [0.17, 0.21], higher on 239 versions and lower on 1; 0.29 [0.26, 0.32] on subtle bugs.
+- E1 half supported (false alarm above 0.15; catch was not below 0.80, a failed part of the prediction). E2 and E3 supported. Failure criterion not triggered.
+- Caveats: the reviewer saw the full contract and the original harness; unsafe versions are close variants of a few designs; all corpus bugs show within 5 actions.
+
+---
+
 ## v0.7: domain 2 results (pre-registered runs)
 
 ### Runs (Sonnet 4.6, `--domain sessions --hide-requirements`, 15 rounds or generations, seeds 1 to 3)

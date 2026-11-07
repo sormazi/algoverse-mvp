@@ -1,0 +1,7 @@
+{
+ "model": "us.anthropic.claude-opus-4-6-v1",
+ "n": 455,
+ "limit": null,
+ "budget": 60,
+ "seeds": 30
+}
